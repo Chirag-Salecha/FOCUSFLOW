@@ -1,89 +1,130 @@
 # FocusFlow AI
 
-FocusFlow AI is a privacy-first, full-stack student productivity and focus companion built to keep study sessions, tasks, and class attendance in one unified workspace.
+FocusFlow AI is a privacy-first, full-stack student productivity and focus management platform built to unify deep-work tracking, task management, document reading, and academic attendance in a single workspace.
 
-Most online study timers ignore whether you are actually working, while commercial proctoring tools stream webcam footage to external servers. We built FocusFlow to bridge that gap: it tracks focus in real time using client-side computer vision and browser visibility events, ensuring that zero video frames ever leave your machine.
+Traditional study timers rely entirely on manual self-reporting and keep counting even when a user switches tabs or walks away from their desk. On the other hand, commercial exam-proctoring tools stream continuous webcam footage to external cloud servers, creating heavy bandwidth overhead and serious privacy concerns. FocusFlow AI solves both problems by executing computer vision inference and browser focus tracking entirely on the client device—ensuring that zero video frames or audio recordings ever leave the user's machine.
+
+---
+
+## Problem Statement and Design Philosophy
+
+Students balancing coursework, coding projects, and exam preparation typically rely on fragmented tools: one app for to-do lists, another for Pomodoro timers, a PDF viewer for lecture notes, and spreadsheets or mental math to track mandatory 75% class attendance. Switching between these disconnected tools introduces friction and triggers frequent context-switching.
+
+FocusFlow AI was engineered around three core principles:
+
+1. **Zero-Upload Local Privacy:** All webcam frames and object detection models run directly inside the browser memory via WebRTC and TensorFlow.js. Only lightweight, numerical session summaries (such as duration, tab-switch counts, and computed focus scores) are transmitted to the backend.
+2. **Real-Time Behavioral Accountability:** Instead of passive timers, the system actively monitors window visibility and presence during timed work blocks, providing immediate audio-visual feedback when attention drifts.
+3. **Academic Context Awareness:** Productivity metrics are tied directly to real student constraints, linking reading tasks to course PDFs and factoring subject-wise attendance health into daily planning.
 
 ---
 
 ## System Architecture
 
-FocusFlow uses a decoupled client-server architecture where all heavy media and distraction processing happens directly inside the browser before lightweight session metrics are synced to the backend.
+FocusFlow AI follows a decoupled client-server architecture. The React client handles high-frequency UI updates, local machine learning inference, and browser event listeners, while the Node.js and Express REST API manages authentication, relational persistence, and analytical aggregations.
 
 ```mermaid
 flowchart LR
-    subgraph Client ["Browser / Electron Client (React 18 + Vite)"]
-        UI[Dashboard & Split-Screen PDF Reader]
-        Cam[Study Cam: WebRTC + TensorFlow.js COCO-SSD]
-        Vis[Tab Monitor: HTML5 Page Visibility API]
-        Audio[Alert Engine: Web Audio API]
-        Cam -->|Local Inference Only| UI
-        Vis -->|Violation Events <50ms| Audio
+    subgraph Client["Browser and Electron Client"]
+        UI["Dashboard and Split-Screen PDF Reader"]
+        Cam["Study Cam: WebRTC and TensorFlow.js"]
+        Vis["Tab Monitor: Page Visibility API"]
+        Audio["Alert Engine: Web Audio API"]
+        Cam -->|"Local Inference Only"| UI
+        Vis -->|"Violation Events"| Audio
         Vis --> UI
     end
 
-    subgraph Server ["REST API Backend (Node.js + Express)"]
-        Auth[JWT Auth Middleware]
-        Ctrl[Controllers: Tasks, Sessions, Attendance, Chat]
+    subgraph Server["REST API Backend"]
+        Auth["JWT Auth Middleware"]
+        Ctrl["Controllers: Tasks, Sessions, Attendance"]
         Auth --> Ctrl
     end
 
-    DB[(MySQL 8 Database)]
+    DB[("MySQL 8 Database")]
 
-    UI <-->|JSON / REST over HTTP| Auth
-    Ctrl <-->|mysql2/promise| DB
+    UI <-->|"JSON over HTTP"| Auth
+    Ctrl <-->|"mysql2"| DB
 ```
 
 ---
 
-## Core Features
+## Core Modules and Features
 
-- **Privacy-First Study Camera (`WebRTC` + `TensorFlow.js`):** Renders your live camera feed and runs `COCO-SSD` object detection locally in the browser to verify presence and detect distractions without uploading video to any server.
-- **Real-Time Tab-Switch Detection:** Listens to the HTML5 Page Visibility API to catch tab switches in under 50 ms, automatically pausing your Pomodoro timer, triggering a synthesized Web Audio API chime, and logging the distraction.
-- **Dynamic Focus Score Engine:** Computes a live productivity score by weighing completed tasks, uninterrupted study sessions, tab-switch penalties, and subject attendance health.
-- **75% Attendance & Bunk Manager:** Tracks subject-wise presents and absences with quick increment/decrement controls and highlights safe margins before your attendance drops below the mandatory 75% threshold.
-- **Split-Screen PDF Reader:** Lets you read lecture notes and course PDFs side-by-side with your task list, automatically marking linked tasks complete once you scroll past 98% of the document.
-- **Local Study Buddy Chatbot:** A lightweight, rule-based NLP chat drawer that queries your MySQL records to summarize pending tasks and safe bunk margins on demand.
-- **Visual Analytics Dashboard:** Plots weekly study hours, focus trends, and subject-wise attendance breakdowns using Recharts.
-- **Optional Electron Desktop Shell:** Wraps the web app into a standalone desktop window with process-level focus lockouts during active study blocks.
+### 1. Privacy-First Study Camera (`WebRTC` + `TensorFlow.js`)
+- Captures the local video stream using the browser `MediaDevices` API and runs a pre-trained `COCO-SSD` object detection model directly on the client GPU/CPU via `@tensorflow/tfjs`.
+- Continuously verifies user presence and flags environmental distractions (such as mobile phones entering the frame or the user stepping away) in real time without storing or transmitting video frames.
+
+### 2. Real-Time Tab-Switch and Focus Monitor
+- Integrates the HTML5 **Page Visibility API** (`visibilitychange`) and window focus listeners to detect tab switches, window minimization, or context switches in under 50 milliseconds.
+- Automatically pauses the active Pomodoro countdown upon detecting a distraction, logs a timestamped violation event, and synthesizes a non-intrusive acoustic chime using the native **Web Audio API** without external audio dependencies.
+
+### 3. Dynamic Focus Score Engine
+- Evaluates study quality beyond raw hours spent at a desk by computing a weighted **Focus Score** across four live signals:
+  - Completed vs. pending daily tasks
+  - Uninterrupted Pomodoro session duration
+  - Tab-switch and webcam distraction penalties
+  - Overall subject attendance standing
+
+### 4. 75% Attendance and Safe Bunk Manager
+- Designed around university attendance requirements, allowing students to log present and absent classes per subject with single-click increment/decrement controls.
+- Dynamically calculates current attendance percentages, highlights subjects approaching the 75% cutoff, and computes the exact number of classes a student can safely miss—or must attend consecutively—to stay above the threshold.
+
+### 5. Split-Screen PDF Document Reader
+- Embeds a side-by-side workspace pairing a `PDF.js` document viewer with the active task queue so students can read lecture notes or research papers without leaving the app.
+- Tracks reading scroll depth automatically and marks linked study tasks as completed once the user reaches 98% of the document.
+
+### 6. Local Study Buddy Chatbot
+- Provides an integrated, zero-latency conversational drawer powered by deterministic pattern matching and direct SQL queries.
+- Answers natural-language prompts regarding pending deadlines, daily focus scores, and subject-wise attendance margins directly from the user's MySQL records without relying on external LLM APIs.
+
+### 7. Visual Analytics and Streak Dashboard
+- Aggregates historical study sessions into interactive weekly time-series charts, distraction frequency breakdowns, and subject attendance comparisons using **Recharts**.
+- Maintains consecutive daily study streaks to reinforce long-term consistency.
+
+### 8. Optional Electron Desktop Shell
+- Wraps the React frontend inside a standalone **Electron** desktop container (`main.js` and `preload.js`) with IPC bridges for stricter desktop focus isolation during exam preparation.
 
 ---
 
-## Focus Session & Distraction Pipeline
+## Focus Session and Distraction Pipeline
 
 ```mermaid
 sequenceDiagram
     actor Student
     participant App as React Frontend
-    participant API as Browser APIs (Visibility & WebRTC)
+    participant API as Browser APIs
     participant Server as Express Backend
     participant DB as MySQL
 
     Student->>App: Start Pomodoro Study Session
-    App->>API: Initialize Local Camera & Visibility Listeners
-    loop During Active Session
+    App->>API: Initialize Camera and Visibility Listeners
+    loop Active Session
         API-->>App: Run Local TensorFlow.js Frame Check
-        alt Student Switches Tab or Minimizes Window
-            API->>App: visibilitychange (hidden)
-            App->>App: Pause Timer + Play Web Audio Alert
+        alt Student Switches Tab
+            API->>App: visibilitychange hidden
+            App->>App: Pause Timer and Play Web Audio Alert
             App->>App: Increment Violation Counter
         end
     end
     Student->>App: Complete Session
-    App->>Server: POST /api/sessions (duration, violations, focus_score)
-    Server->>DB: Persist Session & Update Daily Streak
+    App->>Server: POST /api/sessions
+    Server->>DB: Save Session and Update Streak
     DB-->>App: Return Updated Focus Analytics
 ```
 
 ---
 
-## Tech Stack
+## Technology Stack
 
-- **Frontend:** React 18 (Vite), Tailwind CSS, Recharts, PDF.js, TensorFlow.js (`@tensorflow/tfjs`, `@tensorflow-models/coco-ssd`)
-- **Browser APIs:** HTML5 Page Visibility API, Web Audio API, WebRTC / MediaDevices API
-- **Backend:** Node.js, Express.js, JWT Authentication (`jsonwebtoken`), `bcryptjs`
-- **Database:** MySQL 8 (`mysql2/promise`)
-- **Desktop Wrapper:** Electron
+| Layer | Technologies Used |
+| :--- | :--- |
+| **Frontend Framework** | React 18 (Vite), Tailwind CSS, React Router, Context API |
+| **Client-Side AI & Media** | TensorFlow.js (`@tensorflow/tfjs`), COCO-SSD, WebRTC (`MediaDevices`) |
+| **Browser & Visualization APIs** | HTML5 Page Visibility API, Web Audio API, PDF.js, Recharts |
+| **Backend Runtime & API** | Node.js, Express.js, RESTful JSON Architecture |
+| **Authentication & Security** | JSON Web Tokens (`jsonwebtoken`), `bcryptjs` password hashing, CORS |
+| **Database** | MySQL 8 (`mysql2/promise` connection pooling) |
+| **Desktop Container** | Electron (`main.js`, `preload.js` IPC bridge) |
 
 ---
 
@@ -128,108 +169,45 @@ erDiagram
 
 ---
 
-## Project Structure
+## Repository Structure
 
 ```text
 focusflow-ai/
 ├── backend/
 │   └── src/
-│       ├── config/        # MySQL connection pool, schema.sql, and seed scripts
-│       ├── controllers/   # Auth, tasks, attendance, sessions, insights, and chat logic
-│       ├── middleware/    # JWT token verification middleware
-│       ├── routes/        # Express REST API route definitions
-│       └── utils/         # Streak calculation and helper functions
+│       ├── config/        # MySQL connection pool, schema.sql, and initial seed scripts
+│       ├── controllers/   # Modular logic for auth, tasks, attendance, sessions, insights, and chat
+│       ├── middleware/    # JWT token verification and request protection
+│       ├── routes/        # Versioned REST API route definitions
+│       └── utils/         # Study streak calculation and scoring helpers
 ├── frontend/
 │   └── src/
-│       ├── components/    # Navbar, Sidebar, Clock, and Study Buddy Chat drawer
-│       ├── context/       # Global AuthContext state provider
-│       └── pages/         # Dashboard, Camera, Pomodoro, Attendance, DocumentReader, Analytics
-├── main.js                # Electron desktop main process
-└── preload.js             # Electron IPC preload bridge
+│       ├── components/    # Reusable Navbar, Sidebar, live Clock, and Study Buddy Chat drawer
+│       ├── context/       # Global AuthContext session state provider
+│       └── pages/         # Dashboard, Study Cam, Pomodoro, Attendance, PDF Reader, and Analytics
+├── main.js                # Electron desktop window lifecycle and focus management
+└── preload.js             # Secure Electron contextBridge preload script
 ```
 
 ---
 
-## Getting Started
+## API Endpoints Summary
 
-### Prerequisites
-
-- Node.js (v18 or higher)
-- MySQL Server (v8.0 or higher)
-
-### 1. Clone the Repository
-
-```bash
-git clone https://github.com<your-username>/<your-repo-name>.git
-cd focusflow-ai
-```
-
-### 2. Initialize the Database
-
-Create a local MySQL database named `focusflow_db`, then import the schema and optional seed data:
-
-```bash
-mysql -u root -p focusflow_db < backend/src/config/schema.sql
-node backend/src/config/seed.js
-```
-
-### 3. Configure and Start the Backend
-
-```bash
-cd backend
-npm install
-```
-
-Create a `.env` file inside `backend/` with your local environment variables:
-
-```env
-PORT=5000
-DB_HOST=localhost
-DB_USER=root
-DB_PASSWORD=your_mysql_password
-DB_NAME=focusflow_db
-JWT_SECRET=your_secret_key
-```
-
-Start the Express API server:
-
-```bash
-npm start
-```
-
-### 4. Start the Frontend
-
-Open a separate terminal window:
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Open the local development URL printed in your terminal (typically `http://localhost:5173`) to launch FocusFlow AI.
-
-### 5. Optional: Run as an Electron Desktop App
-
-From the root `focusflow-ai/` directory:
-
-```bash
-npm install
-npm start
-```
+- **`/api/auth`** — User registration, login, password hashing, and JWT session verification.
+- **`/api/tasks`** — CRUD operations for daily study tasks, priority tagging, and PDF completion triggers.
+- **`/api/sessions`** — Logging completed Pomodoro blocks, tab-switch violation counts, and daily streak updates.
+- **`/api/attendance`** — Subject-level class tracking, 75% threshold calculations, and safe bunk projections.
+- **`/api/insights`** — Aggregated metrics powering the Focus Score engine and Recharts analytics views.
+- **`/api/chat`** — Query handler for the local Study Buddy assistant.
 
 ---
 
-## Screenshots
+## Future Scope
 
-> Add 3 to 4 screenshots of your Main Dashboard, Study Camera view, Attendance Manager, and Analytics charts here by dragging and dropping PNGs directly into GitHub's README editor.
+- **Adaptive Break Scheduling** - Dynamically adjust Pomodoro work-to-rest intervals based on a user's historical distraction frequency across different times of the day.
+- **Calendar and LMS Integration** - Sync assignment deadlines, exam schedules, and daily class timetables automatically from university portals or standard `.ics` calendar feeds.
+- **Offline-First Session Sync** - Store active study timers, PDF reading progress, and attendance updates locally in `IndexedDB` when offline and sync seamlessly with MySQL once reconnected.
+- **Custom Distraction Allowlists** - Let students whitelist specific research domains or documentation tabs during active study sessions so legitimate reference lookups do not trigger tab-switch penalties.
+- **Peer Study Rooms** - Introduce opt-in, privacy-preserving study rooms where friends can share live Focus Scores and daily streak milestones without sharing webcam feeds.
 
----
-
-## Contributors
-
-- **Chirag Salecha**
-- **Achyuth RH**
-- **Adarsh MR**
-- **Shridevi VD**
 
